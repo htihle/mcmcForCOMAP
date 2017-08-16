@@ -1,15 +1,18 @@
 import os
+import sys
 import shutil
+import importlib
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d, UnivariateSpline
 from mpi4py import MPI
 
-import limlam_mocker as llm
+
 import params
 import cov_params
 import mcmc_params
-
+sys.path.append(mcmc_params.limlam_dir)
+llm = importlib.import_module('limlam_mocker')
 
 ### begin bit from @tonyyli
 import errno
@@ -119,7 +122,7 @@ n_catalogues_local = len(my_indices)
 B_i = np.zeros((len(temp_hist_bins) - 1, n_maps_x * n_maps_y, n_catalogues_local))
 for i in range(n_catalogues_local):
     seednr = range(13579, 13901, 2)[my_indices[i]]
-    halo_fp = cov_params.catalogue_dir + cov_params.catalogue_name + str(seednr) + '.npz'
+    halo_fp = mcmc_params.limlam_dir + cov_params.catalogue_dir + cov_params.catalogue_name + str(seednr) + '.npz'
     B_i[:, :, i] = get_temp_histograms(map=map, halo_fp=halo_fp)
 
 gathered_data = comm.gather(B_i, root=0)

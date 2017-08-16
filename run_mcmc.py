@@ -11,11 +11,12 @@ from scipy.interpolate import interp1d, UnivariateSpline
 
 
 if len(sys.argv) < 2:
-    import params
     import mcmc_params
+    import params
     cov_mode = 'diag'
 else:
     cov_id = sys.argv[1]
+    cov_mode = 'full'
     sys.path.append('output_cov/param/')
     mcmc_params = importlib.import_module('mcmc_params_id' + str(cov_id))
     params = importlib.import_module('params_id' + str(cov_id))
@@ -68,23 +69,22 @@ def noise_ps(k, Tsys, Nfeeds, tobs, Oobs, fwhm, Ompix, dnu, Dnu,
 x, B_i_data = np.loadtxt(mcmc_params.B_i_fp)
 k_tofit, Pk_tofit, Nmodes_tofit = np.loadtxt(mcmc_params.pspec_fp)
 sigma_noise, Pnoise, _, W = noise_ps(k_tofit, mcmc_params.Tsys_K,
-                                      mcmc_params.Nfeeds, mcmc_params.tobs_hr * 3600,
-                                      mapinst.fov_x * mapinst.fov_y * (np.pi / 180) ** 2,
-                                      np.pi / (15 * 180), mapinst.Ompix, mapinst.dnu,
-                                      np.ptp(mapinst.nu_binedges),
-                                      mapinst.nu_rest / np.mean(mapinst.nu_binedges) - 1,
-                                      mcmc_params.cosmo, mapinst.nu_rest,
-                                      Nmodes=Nmodes_tofit)
+                                     mcmc_params.Nfeeds, mcmc_params.tobs_hr * 3600,
+                                     mapinst.fov_x * mapinst.fov_y * (np.pi / 180) ** 2,
+                                     np.pi / (15 * 180), mapinst.Ompix, mapinst.dnu,
+                                     np.ptp(mapinst.nu_binedges),
+                                     mapinst.nu_rest / np.mean(mapinst.nu_binedges) - 1,
+                                     mcmc_params.cosmo, mapinst.nu_rest,
+                                     Nmodes=Nmodes_tofit)
 
 
 def mock_pspec(pos):
     global mapinst
-    halos_fp = os.path.join(mcmc_params.halos_dir,
-                            random.choice(os.listdir(mcmc_params.halos_dir)))
+    halos_fp = os.path.join(mcmc_params.limlam_dir + mcmc_params.halos_dir,
+                            random.choice(os.listdir(mcmc_params.limlam_dir + mcmc_params.halos_dir)))
     halos, cosmo = llm.load_peakpatch_catalogue(halos_fp)
     halos = llm.cull_peakpatch_catalogue(halos, params.min_mass, mapinst)
 
-    redshift_to_chi = UnivariateSpline(halos.redshift, halos.chi)
     halos.Lco = llm.Mhalo_to_Lco(halos, params.model, pos)
     if np.all(np.isfinite(halos.Lco)):
         lum_hist = np.histogram(halos.Lco, bins=lum_hist_bins_int)[0] / np.diff(
@@ -96,10 +96,10 @@ def mock_pspec(pos):
     mapinst.maps = llm.Lco_to_map(halos, mapinst)
     # Add noise
     map_with_noise = mapinst.maps[None, :] + np.random.randn(n_noise, *mapinst.maps.shape) * noise_temp
-    map_with_noise -= map_with_noise.mean(axis=(1, 2, 3))
+    map_with_noise -= map_with_noise.mean(axis=(1, 2, 3))[:, None, None, None]
     B_i = np.histogram(np.ma.masked_invalid(map_with_noise).compressed(),
                        bins=temp_hist_bins)[0] / n_noise
-    k, Pk, Nmodes = llm.map_to_pspec(mapinst, redshift_to_chi)
+    k, Pk, Nmodes = llm.map_to_pspec(mapinst, cosmo)
 
     return Pk, Pk / np.sqrt(Nmodes) / W, lum_hist, B_i
 
@@ -131,36 +131,37 @@ def lnlike(pos):
     sigma_sample = sigma_sample.mean(0)
     lum_hist = lum_hist.mean(0)
     B_i = B_i.mean(0)
-
+    B_i[np.where(B_i == 0)] = 0.01
     if cov_mode == 'diag':
         if mode == 'ps':
             loglike = -0.5 * np.sum(
                 (Pk_tofit - Pnoise - Pk_mod) ** 2 / (sigma_noise ** 2 + (n_realizations + 1.0)/n_realizations * sigma_sample ** 2)
                 + np.log(sigma_noise ** 2 + (n_realizations + 1.0)/n_realizations * sigma_sample ** 2))
         elif mode == 'vid':
-            warnings.filterwarnings('error')
-            try:
-                B_i[np.where(B_i == 0)] = 0.01
-                loglike = -np.sum((B_i - B_i_data) ** 2 / (2 * B_i) + np.log(B_i))
-            except RuntimeWarning:
-                print B_i
-                print "RuntimeWarning caught, returning - np.inf"
-                print "pos = ", pos
-                loglike = - np.inf
-            warnings.filterwarnings('default')
+            loglike = -np.sum((B_i - B_i_data) ** 2 / (2 * B_i) + np.log(B_i))
+            # warnings.filterwarnings('error')
+            # try:
+            #     B_i[np.where(B_i == 0)] = 0.01
+            #     loglike = -np.sum((B_i - B_i_data) ** 2 / (2 * B_i) + np.log(B_i))
+            # except RuntimeWarning:
+            #     print B_i
+            #     print "RuntimeWarning caught, returning - np.inf"
+            #     print "pos = ", pos
+            #     loglike = - np.inf
+            # warnings.filterwarnings('default')
 
         else:
             print "Unknown, mode"
             loglike = - np.infty
     else:
         if mode == 'ps':
-            mean = Pk_mod
+            mean = Pk_mod + Pnoise
         elif mode == 'vid':
             mean = B_i
+
         else:
             print "Unknown, mode"
             return -np.infty, Pk_mod, lum_hist, B_i
-
         loglike = - 0.5 * np.matmul((data - mean), np.matmul(inv_cov_mat, (data - mean)))
 
     return loglike, Pk_mod, lum_hist, B_i
@@ -218,7 +219,7 @@ if __name__ == '__main__':
     param_fp = os.path.join(
         mcmc_params.output_dir, 'param', 'run{0:d}.py'.format(runid))
     shutil.copy2('mcmc_params.py', param_fp)
-    n_walkers = 200
+    n_walkers = mcmc_params.n_walkers
     if mode == 'ps':
         sampler = emcee.EnsembleSampler(n_walkers, 5, lnprob, threads=n_threads)
     elif mode == 'vid':
@@ -240,7 +241,7 @@ if __name__ == '__main__':
                     open(lumif_fp, 'a') as (flumif), \
                     open(B_i_fp, 'a') as (fB_i), \
                     open(acorr_fp, 'a') as facorr:
-                j = 0;
+                j = 0
                 while j < n_walkers:  # nwalkers
                     fchain.write('{0:4d} {1:s}\n'.format(
                         j, ' '.join([str(p) for p in position[j]])))
@@ -251,6 +252,6 @@ if __name__ == '__main__':
                     fB_i.write('{0:4d} {1:s}\n'.format(
                         j, ' '.join([str(b) for b in blobs[j][2]])))
                     j += 1
-                facorr.write('{0:s}\n'.format(str(tacorr)));
+                facorr.write('{0:s}\n'.format(str(tacorr)))
         pos = position
         i += 1

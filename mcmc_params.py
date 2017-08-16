@@ -9,18 +9,22 @@ Tsys_K = 40
 Nfeeds = 19
 tobs_hr = 6000
 
-limlam_dir = '/home/havard/Documents/covariance_calculator/limlam_mocker/limlam_mocker/'
+limlam_dir = '/home/havard/Documents/covariance_calculator/limlam_mocker/'
 output_dir = 'output_test/'
 halos_dir = 'catalogues/'
 pspec_fp = 'comap_test_pspec_10muK.txt'
 B_i_fp = 'bin_counts_test_10muK.txt'
 
-mode = 'ps'
-n_noise = 10  # Number of noise realizations per signal realization for the vid
 
-n_realizations = 10  # Number of realizations of CO signal map used to compute average power spectrum and vid
+mode = 'vid'
+
+n_walkers = 10
+
+n_noise = 2  # Number of noise realizations per signal realization for the vid
+
+n_realizations = 2  # Number of realizations of CO signal map used to compute average power spectrum and vid
 # for each mcmc-step
 
-n_threads = 10
+n_threads = 4
 
-nsteps = 10
+nsteps = 2
