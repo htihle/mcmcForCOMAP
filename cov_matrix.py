@@ -55,7 +55,7 @@ shutil.copy2('mcmc_params.py', param_mcmc_fp)
 shutil.copy2('cov_params.py', param_cov_fp)
 shutil.copy2('params.py', param_fp)
 
-temp_hist_bins = mcmc_params.temp_hist_bins #np.logspace(1, 2, 26)
+temp_hist_bins = mcmc_params.temp_hist_bins  #np.logspace(1, 2, 26)
 
 map = llm.params_to_mapinst(params)
 
@@ -73,6 +73,7 @@ map.pix_binedges_y = np.arange(- fov_full / 2, fov_full / 2 + map.pix_size_y, ma
 
 noise_temp = mcmc_params.Tsys_K * 1e6 / np.sqrt(mcmc_params.tobs_hr * 3600 * mcmc_params.Nfeeds /
                                                 (params.npix_x * params.npix_y) * map.dnu * 1e9)
+
 
 def distribute_indices(n_indices, n_processes, my_rank):
     divide = n_indices / n_processes
@@ -99,7 +100,7 @@ def get_temp_histograms(map, halo_fp):
 
     map.maps = llm.Lco_to_map(halos, map)
 
-    map.maps = map.maps + np.random.randn(*map.maps.shape)
+    map.maps = map.maps + np.random.randn(*map.maps.shape) * noise_temp
     map.maps -= map.maps.mean()
 
     B_i = np.zeros((len(temp_hist_bins) - 1, n_maps_x * n_maps_y))
