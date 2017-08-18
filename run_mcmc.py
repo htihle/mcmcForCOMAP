@@ -7,6 +7,7 @@ import warnings
 import importlib
 
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d, UnivariateSpline
 
 
@@ -21,8 +22,9 @@ else:
     mcmc_params = importlib.import_module('mcmc_params_id' + str(cov_id))
     params = importlib.import_module('params_id' + str(cov_id))
     cov_mat = np.load('output_cov/cov/cov_mat_id' + str(cov_id) + '.npy')
-    inv_cov_mat = np.linalg.inv(cov_mat)
-    data = np.load('output_cov/data/data_id' + str(cov_id) + '.npy')[:, 0]
+    full_data = np.load('output_cov/data/data_id' + str(cov_id) + '.npy')
+    data_avg_0 = full_data.mean(1)
+    data = full_data[:, 0]
 
 sys.path.append(mcmc_params.limlam_dir)
 llm = importlib.import_module('limlam_mocker')
@@ -94,6 +96,8 @@ def mock_pspec(pos):
                                 bins=lum_hist_bins_int)[0] / np.diff(
             np.log10(lum_hist_bins_obs)) / CO_V
     mapinst.maps = llm.Lco_to_map(halos, mapinst)
+    B_i_temp = np.histogram(mapinst.maps + np.random.randn(*mapinst.maps.shape) * noise_temp, bins=temp_hist_bins)[0]
+
     # Add noise
     map_with_noise = mapinst.maps[None, :] + np.random.randn(n_noise, *mapinst.maps.shape) * noise_temp
     map_with_noise -= map_with_noise.mean(axis=(1, 2, 3))[:, None, None, None]
@@ -162,7 +166,13 @@ def lnlike(pos):
         else:
             print "Unknown, mode"
             return -np.infty, Pk_mod, lum_hist, B_i
-        loglike = - 0.5 * np.matmul((data - mean), np.matmul(inv_cov_mat, (data - mean)))
+        local_cov_mat = cov_mat * np.sqrt(np.outer(mean, mean) / np.outer(data_avg_0, data_avg_0))
+        inv_cov_mat = np.linalg.inv(local_cov_mat)
+        local_cov_det = np.linalg.det(local_cov_mat)
+
+        if local_cov_det <= 0:
+            return -np.infty, Pk_mod, lum_hist, B_i
+        loglike = - 0.5 * np.matmul((data - mean), np.matmul(inv_cov_mat, (data - mean)) + np.log(local_cov_det))
 
     return loglike, Pk_mod, lum_hist, B_i
 
