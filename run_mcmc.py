@@ -105,7 +105,6 @@ def mock_pspec(pos):
                                 bins=lum_hist_bins_int)[0] / np.diff(
             np.log10(lum_hist_bins_obs)) / CO_V
     mapinst.maps = llm.Lco_to_map(halos, mapinst)
-    B_i_temp = np.histogram(mapinst.maps + np.random.randn(*mapinst.maps.shape) * noise_temp, bins=temp_hist_bins)[0]
 
     # Add noise
     map_with_noise = mapinst.maps[None, :] + np.random.randn(n_noise, *mapinst.maps.shape) * noise_temp
