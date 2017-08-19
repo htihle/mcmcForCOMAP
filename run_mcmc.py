@@ -172,7 +172,7 @@ def lnlike(pos):
 
         if local_cov_det <= 0:
             return -np.infty, Pk_mod, lum_hist, B_i
-        loglike = - 0.5 * np.matmul((data - mean), np.matmul(inv_cov_mat, (data - mean)) + np.log(local_cov_det))
+        loglike = - 0.5 * (np.matmul((data - mean), np.matmul(inv_cov_mat, (data - mean))) + np.log(local_cov_det))
 
     return loglike, Pk_mod, lum_hist, B_i
 
