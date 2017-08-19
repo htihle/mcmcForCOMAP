@@ -49,6 +49,15 @@ noise_temp = mcmc_params.Tsys_K * 1e6 / np.sqrt(mcmc_params.tobs_hr * 3600 * mcm
 print "Noise temperature per pixel, ", noise_temp, "muK"
 lum_hist_bins_int = lum_hist_bins_obs * 4.9e-5
 
+all_halos = []
+halo_dir_list = os.listdir(mcmc_params.limlam_dir + mcmc_params.halos_dir)
+for i in range(len(halo_dir_list)):
+    halos_fp = os.path.join(mcmc_params.limlam_dir + mcmc_params.halos_dir,halo_dir_list[i])
+    halos, cosmo = llm.load_peakpatch_catalogue(halos_fp)
+    all_halos.append(llm.cull_peakpatch_catalogue(halos, params.min_mass, mapinst))
+
+print "All halos loaded!"
+
 
 def noise_ps(k, Tsys, Nfeeds, tobs, Oobs, fwhm, Ompix, dnu, Dnu,
               z, cosmo, nu_rest, Nmodes=None):
@@ -82,11 +91,11 @@ sigma_noise, Pnoise, _, W = noise_ps(k_tofit, mcmc_params.Tsys_K,
 
 def mock_pspec(pos):
     global mapinst
-    halos_fp = os.path.join(mcmc_params.limlam_dir + mcmc_params.halos_dir,
-                            random.choice(os.listdir(mcmc_params.limlam_dir + mcmc_params.halos_dir)))
-    halos, cosmo = llm.load_peakpatch_catalogue(halos_fp)
-    halos = llm.cull_peakpatch_catalogue(halos, params.min_mass, mapinst)
-
+    # halos_fp = os.path.join(mcmc_params.limlam_dir + mcmc_params.halos_dir,
+    #                         random.choice(os.listdir(mcmc_params.limlam_dir + mcmc_params.halos_dir)))
+    # halos, cosmo = llm.load_peakpatch_catalogue(halos_fp)
+    # halos = llm.cull_peakpatch_catalogue(halos, params.min_mass, mapinst)
+    halos = all_halos[np.random.randint(0, len(all_halos))]
     halos.Lco = llm.Mhalo_to_Lco(halos, params.model, pos)
     if np.all(np.isfinite(halos.Lco)):
         lum_hist = np.histogram(halos.Lco, bins=lum_hist_bins_int)[0] / np.diff(
