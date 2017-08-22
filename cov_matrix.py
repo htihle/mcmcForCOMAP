@@ -9,7 +9,6 @@ from mpi4py import MPI
 
 
 import params
-import cov_params
 import mcmc_params
 import experiment_params
 sys.path.append(mcmc_params.limlam_dir)
@@ -34,24 +33,24 @@ comm = MPI.COMM_WORLD
 # print "Hello! I'm rank %d from %d running in total..." % (comm.rank, comm.size)
 my_rank, size = (comm.Get_rank(), comm.Get_size())
 
-ensure_dir_exists(cov_params.output_dir)
-ensure_dir_exists(os.path.join(cov_params.output_dir, 'data'))
+ensure_dir_exists(experiment_params.output_dir)
+ensure_dir_exists(os.path.join(experiment_params.output_dir, 'data'))
 runid = 0
 while os.path.isfile(os.path.join(
-        cov_params.output_dir, 'data', 'data_id{0:d}.npy'.format(runid))):
+        experiment_params.output_dir, 'data', 'data_id{0:d}.npy'.format(runid))):
     runid += 1
 data_fp = os.path.join(
-    cov_params.output_dir, 'data', 'data_id{0:d}.npy'.format(runid))
-ensure_dir_exists(os.path.join(cov_params.output_dir, 'cov'))
+    experiment_params.output_dir, 'data', 'data_id{0:d}.npy'.format(runid))
+ensure_dir_exists(os.path.join(experiment_params.output_dir, 'cov'))
 cov_fp = os.path.join(
-    cov_params.output_dir, 'cov', 'cov_mat_id{0:d}'.format(runid))
-ensure_dir_exists(os.path.join(cov_params.output_dir, 'param'))
+    experiment_params.output_dir, 'cov', 'cov_mat_id{0:d}'.format(runid))
+ensure_dir_exists(os.path.join(experiment_params.output_dir, 'param'))
 param_fp = os.path.join(
-    cov_params.output_dir, 'param', 'params_id{0:d}.py'.format(runid))
+    experiment_params.output_dir, 'param', 'params_id{0:d}.py'.format(runid))
 # param_mcmc_fp = os.path.join(
-#     cov_params.output_dir, 'param', 'mcmc_params_id{0:d}.py'.format(runid))
+#     experiment_params.output_dir, 'param', 'mcmc_params_id{0:d}.py'.format(runid))
 param_experiment_fp = os.path.join(
-    cov_params.output_dir, 'param', 'experiment_params_id{0:d}.py'.format(runid))
+    experiment_params.output_dir, 'param', 'experiment_params_id{0:d}.py'.format(runid))
 
 # shutil.copy2('mcmc_params.py', param_mcmc_fp)
 shutil.copy2('experiment_params.py', param_experiment_fp)
@@ -62,7 +61,7 @@ temp_hist_bins = experiment_params.temp_hist_bins  #np.logspace(1, 2, 26)
 map = llm.params_to_mapinst(params)
 
 
-fov_full = cov_params.full_fov
+fov_full = experiment_params.full_fov
 
 n_maps_x = int(np.floor(fov_full/map.fov_x))
 n_maps_y = int(np.floor(fov_full/map.fov_y))
@@ -117,7 +116,7 @@ def get_temp_histograms(map, halo_fp):
             # plt.imshow(map.maps[i * n_pix_small:(i + 1) * n_pix_small, j * n_pix_small:(j + 1) * n_pix_small, 0], interpolation='none')
     return B_i
 
-n_catalogues = cov_params.n_catalogues
+n_catalogues = experiment_params.n_catalogues
 
 my_indices = distribute_indices(n_catalogues, size, my_rank)
 n_catalogues_local = len(my_indices)
@@ -125,7 +124,7 @@ n_catalogues_local = len(my_indices)
 B_i = np.zeros((len(temp_hist_bins) - 1, n_maps_x * n_maps_y, n_catalogues_local))
 for i in range(n_catalogues_local):
     seednr = range(13579, 13901, 2)[my_indices[i]]
-    halo_fp = mcmc_params.limlam_dir + cov_params.catalogue_dir + cov_params.catalogue_name + str(seednr) + '.npz'
+    halo_fp = mcmc_params.limlam_dir + experiment_params.catalogue_dir + experiment_params.catalogue_name + str(seednr) + '.npz'
     B_i[:, :, i] = get_temp_histograms(map=map, halo_fp=halo_fp)
 
 gathered_data = comm.gather(B_i, root=0)
