@@ -11,6 +11,7 @@ from mpi4py import MPI
 import params
 import cov_params
 import mcmc_params
+import experiment_params
 sys.path.append(mcmc_params.limlam_dir)
 llm = importlib.import_module('limlam_mocker')
 
@@ -47,15 +48,16 @@ cov_fp = os.path.join(
 ensure_dir_exists(os.path.join(cov_params.output_dir, 'param'))
 param_fp = os.path.join(
     cov_params.output_dir, 'param', 'params_id{0:d}.py'.format(runid))
-param_mcmc_fp = os.path.join(
-    cov_params.output_dir, 'param', 'mcmc_params_id{0:d}.py'.format(runid))
-param_cov_fp = os.path.join(
-    cov_params.output_dir, 'param', 'cov_params_id{0:d}.py'.format(runid))
-shutil.copy2('mcmc_params.py', param_mcmc_fp)
-shutil.copy2('cov_params.py', param_cov_fp)
+# param_mcmc_fp = os.path.join(
+#     cov_params.output_dir, 'param', 'mcmc_params_id{0:d}.py'.format(runid))
+param_experiment_fp = os.path.join(
+    cov_params.output_dir, 'param', 'experiment_params_id{0:d}.py'.format(runid))
+
+# shutil.copy2('mcmc_params.py', param_mcmc_fp)
+shutil.copy2('experiment_params.py', param_experiment_fp)
 shutil.copy2('params.py', param_fp)
 
-temp_hist_bins = mcmc_params.temp_hist_bins  #np.logspace(1, 2, 26)
+temp_hist_bins = experiment_params.temp_hist_bins  #np.logspace(1, 2, 26)
 
 map = llm.params_to_mapinst(params)
 
@@ -71,8 +73,8 @@ map.fov_x = fov_full
 map.pix_binedges_x = np.arange(- fov_full / 2, fov_full / 2 + map.pix_size_x, map.pix_size_x)
 map.pix_binedges_y = np.arange(- fov_full / 2, fov_full / 2 + map.pix_size_y, map.pix_size_y)
 
-noise_temp = mcmc_params.Tsys_K * 1e6 / np.sqrt(mcmc_params.tobs_hr * 3600 * mcmc_params.Nfeeds /
-                                                (params.npix_x * params.npix_y) * map.dnu * 1e9)
+noise_temp = experiment_params.Tsys_K * 1e6 / np.sqrt(experiment_params.tobs_hr * 3600 * experiment_params.Nfeeds /
+                                                      (params.npix_x * params.npix_y) * map.dnu * 1e9)
 
 
 def distribute_indices(n_indices, n_processes, my_rank):

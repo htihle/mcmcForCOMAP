@@ -10,20 +10,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d, UnivariateSpline
 
+import mcmc_params
 
 if len(sys.argv) < 2:
-    import mcmc_params
     import params
+    import experiment_params
     cov_mode = 'diag'
 else:
     cov_id = sys.argv[1]
     cov_mode = 'full'
     sys.path.append('output_cov/param/')
-    mcmc_params = importlib.import_module('mcmc_params_id' + str(cov_id))
+    experiment_params = importlib.import_module('experiment_params_id' + str(cov_id))
     params = importlib.import_module('params_id' + str(cov_id))
     cov_mat = np.load('output_cov/cov/cov_mat_id' + str(cov_id) + '.npy')
     full_data = np.load('output_cov/data/data_id' + str(cov_id) + '.npy')
     data_avg_0 = full_data.mean(1)
+    # np.savetxt('bin_counts_test_10muK.txt', (0.5 * (mcmc_params.temp_hist_bins[:-1] + mcmc_params.temp_hist_bins[1:]), full_data[:, 33]))
     data = full_data[:, 0]
 
 sys.path.append(mcmc_params.limlam_dir)
@@ -31,20 +33,20 @@ llm = importlib.import_module('limlam_mocker')
 
 lnnormal = lambda x, mu, sigma: -(x - mu) ** 2 / (2 * sigma ** 2)
 
-mode = mcmc_params.mode
+mode = experiment_params.mode
 n_noise = mcmc_params.n_noise
 n_realizations = mcmc_params.n_realizations
 n_threads = mcmc_params.n_threads
 mapinst = llm.params_to_mapinst(params)
 CO_V = mapinst.fov_x * mapinst.fov_y * (np.pi / 180) ** 2 * (
-    mcmc_params.cosmo.comoving_transverse_distance(
+    experiment_params.cosmo.comoving_transverse_distance(
         mapinst.nu_rest / np.mean(mapinst.nu_binedges) - 1) ** 2 * np.abs(
-        mcmc_params.cosmo.comoving_distance(mapinst.z_i)
-        - mcmc_params.cosmo.comoving_distance(mapinst.z_f))).value
+        experiment_params.cosmo.comoving_distance(mapinst.z_i)
+        - experiment_params.cosmo.comoving_distance(mapinst.z_f))).value
 
-lum_hist_bins_obs = mcmc_params.lum_hist_bins_obs
-temp_hist_bins = mcmc_params.temp_hist_bins
-noise_temp = mcmc_params.Tsys_K * 1e6 / np.sqrt(mcmc_params.tobs_hr * 3600 * mcmc_params.Nfeeds /
+lum_hist_bins_obs = experiment_params.lum_hist_bins_obs
+temp_hist_bins = experiment_params.temp_hist_bins
+noise_temp = experiment_params.Tsys_K * 1e6 / np.sqrt(experiment_params.tobs_hr * 3600 * experiment_params.Nfeeds /
                                                 (params.npix_x * params.npix_y) * mapinst.dnu * 1e9)
 print "Noise temperature per pixel, ", noise_temp, "muK"
 lum_hist_bins_int = lum_hist_bins_obs * 4.9e-5
@@ -52,7 +54,7 @@ lum_hist_bins_int = lum_hist_bins_obs * 4.9e-5
 all_halos = []
 halo_dir_list = os.listdir(mcmc_params.limlam_dir + mcmc_params.halos_dir)
 for i in range(len(halo_dir_list)):
-    halos_fp = os.path.join(mcmc_params.limlam_dir + mcmc_params.halos_dir,halo_dir_list[i])
+    halos_fp = os.path.join(mcmc_params.limlam_dir + mcmc_params.halos_dir, halo_dir_list[i])
     halos, cosmo = llm.load_peakpatch_catalogue(halos_fp)
     all_halos.append(llm.cull_peakpatch_catalogue(halos, params.min_mass, mapinst))
 
@@ -79,13 +81,13 @@ def noise_ps(k, Tsys, Nfeeds, tobs, Oobs, fwhm, Ompix, dnu, Dnu,
 
 x, B_i_data = np.loadtxt(mcmc_params.B_i_fp)
 k_tofit, Pk_tofit, Nmodes_tofit = np.loadtxt(mcmc_params.pspec_fp)
-sigma_noise, Pnoise, _, W = noise_ps(k_tofit, mcmc_params.Tsys_K,
-                                     mcmc_params.Nfeeds, mcmc_params.tobs_hr * 3600,
+sigma_noise, Pnoise, _, W = noise_ps(k_tofit, experiment_params.Tsys_K,
+                                     experiment_params.Nfeeds, experiment_params.tobs_hr * 3600,
                                      mapinst.fov_x * mapinst.fov_y * (np.pi / 180) ** 2,
                                      np.pi / (15 * 180), mapinst.Ompix, mapinst.dnu,
                                      np.ptp(mapinst.nu_binedges),
                                      mapinst.nu_rest / np.mean(mapinst.nu_binedges) - 1,
-                                     mcmc_params.cosmo, mapinst.nu_rest,
+                                     experiment_params.cosmo, mapinst.nu_rest,
                                      Nmodes=Nmodes_tofit)
 
 
@@ -112,7 +114,6 @@ def mock_pspec(pos):
     B_i = np.histogram(np.ma.masked_invalid(map_with_noise).compressed(),
                        bins=temp_hist_bins)[0] / n_noise
     k, Pk, Nmodes = llm.map_to_pspec(mapinst, cosmo)
-
     return Pk, Pk / np.sqrt(Nmodes) / W, lum_hist, B_i
 
 
@@ -236,14 +237,21 @@ if __name__ == '__main__':
     ensure_dir_exists(os.path.join(mcmc_params.output_dir, 'param'))
     param_fp = os.path.join(
         mcmc_params.output_dir, 'param', 'run{0:d}.py'.format(runid))
-    shutil.copy2('mcmc_params.py', param_fp)
+    mcmc_param_fp = os.path.join(
+        mcmc_params.output_dir, 'param', 'mcmc_run{0:d}.py'.format(runid))
+    experiment_param_fp = os.path.join(
+        mcmc_params.output_dir, 'param', 'experiment_run{0:d}.py'.format(runid))
+    shutil.copy2('mcmc_params.py', mcmc_param_fp)
+    shutil.copy2('experiment_params.py', experiment_param_fp)
+    shutil.copy2('params.py', param_fp)
     n_walkers = mcmc_params.n_walkers
-    if mode == 'ps':
-        sampler = emcee.EnsembleSampler(n_walkers, 5, lnprob, threads=n_threads)
-    elif mode == 'vid':
-        sampler = emcee.EnsembleSampler(n_walkers, 5, lnprob, threads=n_threads)
+    # if mode == 'ps':
+    #     sampler = emcee.EnsembleSampler(n_walkers, 5, lnprob, threads=n_threads)
+    # elif mode == 'vid':
+    #     sampler = emcee.EnsembleSampler(n_walkers, 5, lnprob, threads=n_threads)
+    sampler = emcee.EnsembleSampler(n_walkers, 5, lnprob, threads=n_threads)
     prior_ctrs = np.array((0, 1.17, 0.21, 0.3, 0.3))
-    pos = [prior_ctrs + 1e-4 * np.random.randn(5) for i in range(n_walkers)]
+    pos = [prior_ctrs + 1e-3 * np.random.randn(5) for i in range(n_walkers)]
     i = 0
     while i < mcmc_params.nsteps:
         print('undergoing iteration {0}'.format(i))
