@@ -63,12 +63,12 @@ for i in range(len(halo_dir_list)):
 print "All halos loaded!"
 
 
-def noise_ps(k, Tsys, Nfeeds, tobs, Oobs, fwhm, Ompix, dnu, Dnu,
-              z, cosmo, nu_rest, Nmodes=None):
+def noise_ps(Tsys, Nfeeds, tobs, Oobs, fwhm, Ompix, dnu, Dnu,
+              z, cosmo, nu_rest, Nmodes):
     # Tsys in K; tobs in sec
     # Oobs in sr; fwhm, dpix in rad
     # dnu (channel BW), Dnu (total BW), nu_rest all in GHz
-    dk = np.mean(np.diff(k))  # 1/Mpc
+    #dk = np.mean(np.diff(k))  # 1/Mpc
     ctd = cosmo.comoving_transverse_distance(z).value
     dx_fwhm = ctd * fwhm / 2.355  # Mpc
     dz = 299792.458 / cosmo.H(z).value * dnu / nu_rest * (1 + z) ** 2  # Mpc
@@ -88,7 +88,7 @@ if (mode == 'ps') or (mode == 'vid + ps'):
         k_tofit, Pk_tofit, Nmodes = np.loadtxt(mcmc_params.pspec_fp)
     elif cov_mode == 'full':
         Nmodes = np.load('output_cov/Nmodes/Nmodes_id' + str(cov_id) + '.npy')
-    sigma_noise, Pnoise = noise_ps(k_tofit, experiment_params.Tsys_K,
+    sigma_noise, Pnoise = noise_ps(experiment_params.Tsys_K,
                                    experiment_params.Nfeeds, experiment_params.tobs_hr * 3600,
                                    mapinst.fov_x * mapinst.fov_y * (np.pi / 180) ** 2,
                                    np.pi / (15 * 180), mapinst.Ompix, mapinst.dnu,
@@ -120,7 +120,7 @@ def generate_mock_map(pos):
     map_with_noise -= map_with_noise.mean(axis=(1, 2, 3))[:, None, None, None]
     B_i = np.histogram(np.ma.masked_invalid(map_with_noise).compressed(),
                        bins=temp_hist_bins)[0] / n_noise
-    k, Pk, Nmodes = llm.map_to_pspec(mapinst, cosmo)
+    k, Pk, Nmodes = llm.map_to_pspec(mapinst, cosmo, kbins=k_hist_bins)
     return Pk, Pk / np.sqrt(Nmodes), lum_hist, B_i
 
 
@@ -135,14 +135,14 @@ def lnprior(pos):
 
 def lnlike(pos):
     if pos[-1] < 0 or pos[-2] < 0:
-        return -np.inf, np.nan * np.ones_like(k_tofit), np.nan * np.ones_like(
+        return -np.inf, np.nan * np.ones_like(k_hist_bins[1:]), np.nan * np.ones_like(
             lum_hist_bins_obs), np.nan * np.ones_like(
             temp_hist_bins)
     if pos[1] == 0:
-        return -np.inf, np.nan * np.ones_like(k_tofit), np.nan * np.ones_like(
+        return -np.inf, np.nan * np.ones_like(k_hist_bins[1:]), np.nan * np.ones_like(
             lum_hist_bins_obs)
-    Pk_mod = np.zeros((n_realizations, len(k_tofit)))
-    sigma_sample = np.zeros((n_realizations, len(k_tofit)))
+    Pk_mod = np.zeros((n_realizations, len(k_hist_bins) - 1))
+    sigma_sample = np.zeros((n_realizations, len(k_hist_bins) - 1))
     lum_hist = np.zeros((n_realizations, len(lum_hist_bins_obs) - 1))
     B_i = np.zeros((n_realizations, len(temp_hist_bins) - 1))
     for i in range(n_realizations):
@@ -179,6 +179,7 @@ def lnlike(pos):
             var_indep = mean ** 2 / Nmodes
         elif mode == 'vid':
             mean = B_i
+            var_indep = mean
         elif mode == 'vid + ps':
             n_k = len(k_hist_bins) - 1
             n_data = len(data)
@@ -190,6 +191,7 @@ def lnlike(pos):
             var_indep[n_k:n_data] = mean[n_k:n_data]
         else:
             print "Unknown, mode, only 'vid', 'ps', 'vid + ps' are allowed."
+            print "You gave:", mode
             return -np.infty, Pk_mod, lum_hist, B_i
         local_cov_mat = cov_mat * np.sqrt(np.outer(var_indep, var_indep) / np.outer(var_indep_0, var_indep_0))
         inv_cov_mat = np.linalg.inv(local_cov_mat)
@@ -206,10 +208,10 @@ def lnprob(pos):
     ll = lnlike(pos)
 
     result = lnprior(pos) + ll[0]
-    if not np.isfinite(result):
-        return -np.inf, np.nan * np.ones_like(k_tofit), np.nan * np.ones_like(
-            lum_hist_bins_obs), np.nan * np.ones_like(
-            temp_hist_bins)
+    # if not np.isfinite(result):
+    #     return -np.inf, np.nan * np.ones_like(k_hist_bins[1:]), np.nan * np.ones_like(
+    #         lum_hist_bins_obs), np.nan * np.ones_like(
+    #         temp_hist_bins)
     return result, ll[1:]
 
 ### begin bit from @tonyyli
