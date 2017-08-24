@@ -24,6 +24,7 @@ else:
     params = importlib.import_module('params_id' + str(cov_id))
     cov_mat = np.load('output_cov/cov/cov_mat_id' + str(cov_id) + '.npy')
     full_data = np.load('output_cov/data/data_id' + str(cov_id) + '.npy')
+    var_indep_0 = np.load('output_cov/var_indep/var_indep_id' + str(cov_id) + '.npy')
     data_avg_0 = full_data.mean(1)
     # np.savetxt('bin_counts_test_10muK.txt', (0.5 * (mcmc_params.temp_hist_bins[:-1] + mcmc_params.temp_hist_bins[1:]), full_data[:, 33]))
     data = full_data[:, 0]
@@ -46,8 +47,9 @@ CO_V = mapinst.fov_x * mapinst.fov_y * (np.pi / 180) ** 2 * (
 
 lum_hist_bins_obs = experiment_params.lum_hist_bins_obs
 temp_hist_bins = experiment_params.temp_hist_bins
+k_hist_bins = experiment_params.k_hist_bins
 noise_temp = experiment_params.Tsys_K * 1e6 / np.sqrt(experiment_params.tobs_hr * 3600 * experiment_params.Nfeeds /
-                                                (params.npix_x * params.npix_y) * mapinst.dnu * 1e9)
+                                                      (params.npix_x * params.npix_y) * mapinst.dnu * 1e9)
 print "Noise temperature per pixel, ", noise_temp, "muK"
 lum_hist_bins_int = lum_hist_bins_obs * 4.9e-5
 
@@ -72,26 +74,31 @@ def noise_ps(k, Tsys, Nfeeds, tobs, Oobs, fwhm, Ompix, dnu, Dnu,
     dz = 299792.458 / cosmo.H(z).value * dnu / nu_rest * (1 + z) ** 2  # Mpc
     Dz = 299792.458 / cosmo.H(z).value * Dnu / nu_rest * (1 + z) ** 2  # Mpc
     Pn = 1e3 * Tsys ** 2 / (Nfeeds * dnu * tobs * Ompix / Oobs) * ctd ** 2 * Ompix * dz
-    if Nmodes is None:
-        Nmodes = k ** 2 * dk * Oobs * ctd ** 2 * Dz / (4 * np.pi ** 2)
-    mu = np.linspace(0, 1, 201)[:, None]
-    W_integrand = np.exp(k ** 2 * (dx_fwhm ** 2 - dz ** 2) * mu ** 2)
-    W = np.exp(-k ** 2 * dx_fwhm ** 2) * np.trapz(W_integrand, mu, axis=0)
-    return Pn / np.sqrt(Nmodes) / W, Pn, Nmodes, W  # (Pk + Pn) / np.sqrt(Nmodes) / W, Pn, Nmodes, W
+    # if Nmodes is None:
+    #     Nmodes = k ** 2 * dk * Oobs * ctd ** 2 * Dz / (4 * np.pi ** 2)
+    # mu = np.linspace(0, 1, 201)[:, None]
+    # W_integrand = np.exp(k ** 2 * (dx_fwhm ** 2 - dz ** 2) * mu ** 2)
+    # W = np.exp(-k ** 2 * dx_fwhm ** 2) * np.trapz(W_integrand, mu, axis=0)
+    return Pn / np.sqrt(Nmodes), Pn  #, Nmodes , W  # (Pk + Pn) / np.sqrt(Nmodes) / W, Pn, Nmodes, W
 
-x, B_i_data = np.loadtxt(mcmc_params.B_i_fp)
-k_tofit, Pk_tofit, Nmodes_tofit = np.loadtxt(mcmc_params.pspec_fp)
-sigma_noise, Pnoise, _, W = noise_ps(k_tofit, experiment_params.Tsys_K,
-                                     experiment_params.Nfeeds, experiment_params.tobs_hr * 3600,
-                                     mapinst.fov_x * mapinst.fov_y * (np.pi / 180) ** 2,
-                                     np.pi / (15 * 180), mapinst.Ompix, mapinst.dnu,
-                                     np.ptp(mapinst.nu_binedges),
-                                     mapinst.nu_rest / np.mean(mapinst.nu_binedges) - 1,
-                                     experiment_params.cosmo, mapinst.nu_rest,
-                                     Nmodes=Nmodes_tofit)
+if cov_mode == 'diag':
+    x, B_i_data = np.loadtxt(mcmc_params.B_i_fp)
+if (mode == 'ps') or (mode == 'vid + ps'):
+    if cov_mode == 'diag':
+        k_tofit, Pk_tofit, Nmodes = np.loadtxt(mcmc_params.pspec_fp)
+    elif cov_mode == 'full':
+        Nmodes = np.load('output_cov/Nmodes/Nmodes_id' + str(cov_id) + '.npy')
+    sigma_noise, Pnoise = noise_ps(k_tofit, experiment_params.Tsys_K,
+                                   experiment_params.Nfeeds, experiment_params.tobs_hr * 3600,
+                                   mapinst.fov_x * mapinst.fov_y * (np.pi / 180) ** 2,
+                                   np.pi / (15 * 180), mapinst.Ompix, mapinst.dnu,
+                                   np.ptp(mapinst.nu_binedges),
+                                   mapinst.nu_rest / np.mean(mapinst.nu_binedges) - 1,
+                                   experiment_params.cosmo, mapinst.nu_rest,
+                                   Nmodes=Nmodes)
 
 
-def mock_pspec(pos):
+def generate_mock_map(pos):
     global mapinst
     # halos_fp = os.path.join(mcmc_params.limlam_dir + mcmc_params.halos_dir,
     #                         random.choice(os.listdir(mcmc_params.limlam_dir + mcmc_params.halos_dir)))
@@ -114,7 +121,7 @@ def mock_pspec(pos):
     B_i = np.histogram(np.ma.masked_invalid(map_with_noise).compressed(),
                        bins=temp_hist_bins)[0] / n_noise
     k, Pk, Nmodes = llm.map_to_pspec(mapinst, cosmo)
-    return Pk, Pk / np.sqrt(Nmodes) / W, lum_hist, B_i
+    return Pk, Pk / np.sqrt(Nmodes), lum_hist, B_i
 
 
 def lnprior(pos):
@@ -139,7 +146,7 @@ def lnlike(pos):
     lum_hist = np.zeros((n_realizations, len(lum_hist_bins_obs) - 1))
     B_i = np.zeros((n_realizations, len(temp_hist_bins) - 1))
     for i in range(n_realizations):
-        Pk_mod[i], sigma_sample[i], lum_hist[i], B_i[i] = mock_pspec(pos)
+        Pk_mod[i], sigma_sample[i], lum_hist[i], B_i[i] = generate_mock_map(pos)
     Pk_mod = Pk_mod.mean(0)
     sigma_sample = sigma_sample.mean(0)
     lum_hist = lum_hist.mean(0)
@@ -154,10 +161,10 @@ def lnlike(pos):
             loglike = -np.sum((B_i - B_i_data) ** 2 / (2 * B_i) + np.log(B_i))
             # warnings.filterwarnings('error')
             # try:
-            #     B_i[np.where(B_i == 0)] = 0.01
-            #     loglike = -np.sum((B_i - B_i_data) ** 2 / (2 * B_i) + np.log(B_i))
+            #     data[np.where(data == 0)] = 0.01
+            #     loglike = -np.sum((data - B_i_data) ** 2 / (2 * data) + np.log(data))
             # except RuntimeWarning:
-            #     print B_i
+            #     print data
             #     print "RuntimeWarning caught, returning - np.inf"
             #     print "pos = ", pos
             #     loglike = - np.inf
@@ -169,13 +176,22 @@ def lnlike(pos):
     else:
         if mode == 'ps':
             mean = Pk_mod + Pnoise
+            var_indep = mean ** 2 / Nmodes
         elif mode == 'vid':
             mean = B_i
-
+        elif mode == 'vid + ps':
+            n_k = len(k_hist_bins) - 1
+            n_data = len(data)
+            mean = np.zeros_like(data)
+            mean[:n_k] = Pk_mod + Pnoise
+            mean[n_k:n_data] = B_i
+            var_indep = np.zeros_like(var_indep_0)
+            var_indep[:n_k] = mean[:n_k] ** 2 / Nmodes
+            var_indep[n_k:n_data] = mean[n_k:n_data]
         else:
-            print "Unknown, mode"
+            print "Unknown, mode, only 'vid', 'ps', 'vid + ps' are allowed."
             return -np.infty, Pk_mod, lum_hist, B_i
-        local_cov_mat = cov_mat * np.sqrt(np.outer(mean, mean) / np.outer(data_avg_0, data_avg_0))
+        local_cov_mat = cov_mat * np.sqrt(np.outer(var_indep, var_indep) / np.outer(var_indep_0, var_indep_0))
         inv_cov_mat = np.linalg.inv(local_cov_mat)
         local_cov_det = np.linalg.det(local_cov_mat)
 
@@ -216,7 +232,7 @@ if __name__ == '__main__':
     ensure_dir_exists(os.path.join(mcmc_params.output_dir, 'chain'))
     runid = 0
     while os.path.isfile(os.path.join(
-            mcmc_params.output_dir, 'chain', 'run{0:d}.dat'.format(runid))):
+            mcmc_params.output_dir, 'param', 'mcmc_run{0:d}.dat'.format(runid))):
         runid += 1
     chain_fp = os.path.join(
         mcmc_params.output_dir, 'chain', 'run{0:d}.dat'.format(runid))
@@ -226,9 +242,9 @@ if __name__ == '__main__':
     ensure_dir_exists(os.path.join(mcmc_params.output_dir, 'lumif'))
     lumif_fp = os.path.join(
         mcmc_params.output_dir, 'lumif', 'run{0:d}.dat'.format(runid))
-    ensure_dir_exists(os.path.join(mcmc_params.output_dir, 'B_i'))
+    ensure_dir_exists(os.path.join(mcmc_params.output_dir, 'data'))
     B_i_fp = os.path.join(
-        mcmc_params.output_dir, 'B_i', 'run{0:d}.dat'.format(runid))
+        mcmc_params.output_dir, 'data', 'run{0:d}.dat'.format(runid))
     ensure_dir_exists(os.path.join(mcmc_params.output_dir, 'acorr'))
     with open(lumif_fp, 'a') as flumif:
         flumif.write('# lum bins: np.logspace(5,12,101)\n # mode =' + mode + '\n')
@@ -236,11 +252,11 @@ if __name__ == '__main__':
         mcmc_params.output_dir, 'acorr', 'run{0:d}.dat'.format(runid))
     ensure_dir_exists(os.path.join(mcmc_params.output_dir, 'param'))
     param_fp = os.path.join(
-        mcmc_params.output_dir, 'param', 'run{0:d}.py'.format(runid))
+        mcmc_params.output_dir, 'param', 'params_run{0:d}.py'.format(runid))
     mcmc_param_fp = os.path.join(
-        mcmc_params.output_dir, 'param', 'mcmc_run{0:d}.py'.format(runid))
+        mcmc_params.output_dir, 'param', 'mcmc_params_run{0:d}.py'.format(runid))
     experiment_param_fp = os.path.join(
-        mcmc_params.output_dir, 'param', 'experiment_run{0:d}.py'.format(runid))
+        mcmc_params.output_dir, 'param', 'experiment_params_run{0:d}.py'.format(runid))
     shutil.copy2('mcmc_params.py', mcmc_param_fp)
     shutil.copy2('experiment_params.py', experiment_param_fp)
     shutil.copy2('params.py', param_fp)

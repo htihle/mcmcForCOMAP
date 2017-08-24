@@ -36,7 +36,7 @@ ensure_dir_exists(experiment_params.output_dir)
 ensure_dir_exists(os.path.join(experiment_params.output_dir, 'data'))
 runid = 0
 while os.path.isfile(os.path.join(
-        experiment_params.output_dir, 'data', 'data_id{0:d}.npy'.format(runid))):
+        experiment_params.output_dir, 'param', 'params_id{0:d}.npy'.format(runid))):
     runid += 1
 data_fp = os.path.join(
     experiment_params.output_dir, 'data', 'data_id{0:d}.npy'.format(runid))
@@ -46,6 +46,9 @@ cov_fp = os.path.join(
 ensure_dir_exists(os.path.join(experiment_params.output_dir, 'var_indep'))
 var_indep_fp = os.path.join(
     experiment_params.output_dir, 'var_indep', 'var_indep_id{0:d}'.format(runid))
+ensure_dir_exists(os.path.join(experiment_params.output_dir, 'Nmodes'))
+Nmodes_fp = os.path.join(
+    experiment_params.output_dir, 'Nmodes', 'Nmodes_id{0:d}'.format(runid))
 ensure_dir_exists(os.path.join(experiment_params.output_dir, 'param'))
 param_fp = os.path.join(
     experiment_params.output_dir, 'param', 'params_id{0:d}.py'.format(runid))
@@ -175,17 +178,20 @@ if my_rank == 0:
         halos, cosmo = llm.load_peakpatch_catalogue(halo_fp)
         k, _, n_modes = llm.map_to_pspec(small_map, cosmo, kbins=k_hist_bins)
         var_indep = data_avg ** 2 / n_modes
+        np.save(Nmodes_fp, n_modes)
     elif experiment_params.mode == 'vid + ps':
         halos, cosmo = llm.load_peakpatch_catalogue(halo_fp)
         k, _, n_modes = llm.map_to_pspec(small_map, cosmo, kbins=k_hist_bins)
         var_indep[:n_k] = data_avg[:n_k] ** 2 / n_modes
         var_indep[n_k:n_data] = data_avg[n_k:n_data]
+        np.save(Nmodes_fp, n_modes)
 
     np.save(data_fp, all_data)
     np.save(cov_fp, cov)
     np.save(var_indep_fp, var_indep)
     cov_divisor = np.sqrt(np.outer(var_indep, var_indep))
-    plt.imshow(cov / cov_divisor, interpolation='none', vmax=10)
+    plt.imshow(cov / cov_divisor, interpolation='none')
+    plt.colorbar()
     plt.show()
 
 
