@@ -55,12 +55,10 @@ lum_hist_bins_int = lum_hist_bins_obs * 4.9e-5
 
 all_halos = []
 halo_dir_list = os.listdir(mcmc_params.limlam_dir + mcmc_params.halos_dir)
-print halo_dir_list
 for i in range(len(halo_dir_list)):
     halos_fp = os.path.join(mcmc_params.limlam_dir + mcmc_params.halos_dir, halo_dir_list[i])
     halos, cosmo = llm.load_peakpatch_catalogue(halos_fp)
     all_halos.append(llm.cull_peakpatch_catalogue(halos, params.min_mass, mapinst))
-    print halos.M
 print "All halos loaded!"
 
 
