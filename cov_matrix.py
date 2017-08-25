@@ -38,6 +38,7 @@ runid = 0
 while os.path.isfile(os.path.join(
         experiment_params.output_dir, 'param', 'params_id{0:d}.py'.format(runid))):
     runid += 1
+comm.Barrier()
 data_fp = os.path.join(
     experiment_params.output_dir, 'data', 'data_id{0:d}.npy'.format(runid))
 ensure_dir_exists(os.path.join(experiment_params.output_dir, 'cov'))
