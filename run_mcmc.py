@@ -55,11 +55,12 @@ lum_hist_bins_int = lum_hist_bins_obs * 4.9e-5
 
 all_halos = []
 halo_dir_list = os.listdir(mcmc_params.limlam_dir + mcmc_params.halos_dir)
+print halo_dir_list
 for i in range(len(halo_dir_list)):
     halos_fp = os.path.join(mcmc_params.limlam_dir + mcmc_params.halos_dir, halo_dir_list[i])
     halos, cosmo = llm.load_peakpatch_catalogue(halos_fp)
     all_halos.append(llm.cull_peakpatch_catalogue(halos, params.min_mass, mapinst))
-
+    print halos.M
 print "All halos loaded!"
 
 
@@ -234,8 +235,10 @@ if __name__ == '__main__':
     ensure_dir_exists(os.path.join(mcmc_params.output_dir, 'chain'))
     runid = 0
     while os.path.isfile(os.path.join(
-            mcmc_params.output_dir, 'param', 'mcmc_run{0:d}.dat'.format(runid))):
+            mcmc_params.output_dir, 'param', 'mcmc_params_run{0:d}.py'.format(runid))):
         runid += 1
+
+    print "My runid is: ", runid
     chain_fp = os.path.join(
         mcmc_params.output_dir, 'chain', 'run{0:d}.dat'.format(runid))
     ensure_dir_exists(os.path.join(mcmc_params.output_dir, 'pspec'))
@@ -260,8 +263,8 @@ if __name__ == '__main__':
     experiment_param_fp = os.path.join(
         mcmc_params.output_dir, 'param', 'experiment_params_run{0:d}.py'.format(runid))
     shutil.copy2('mcmc_params.py', mcmc_param_fp)
-    shutil.copy2('experiment_params.py', experiment_param_fp)
-    shutil.copy2('params.py', param_fp)
+    shutil.copy2('output_cov/param/' + 'experiment_params_id' + str(cov_id) + '.py', experiment_param_fp)
+    shutil.copy2('output_cov/param/' + 'params_id' + str(cov_id) + '.py', param_fp)
     n_walkers = mcmc_params.n_walkers
     # if mode == 'ps':
     #     sampler = emcee.EnsembleSampler(n_walkers, 5, lnprob, threads=n_threads)
