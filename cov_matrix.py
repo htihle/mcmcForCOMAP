@@ -36,7 +36,7 @@ ensure_dir_exists(experiment_params.output_dir)
 ensure_dir_exists(os.path.join(experiment_params.output_dir, 'data'))
 runid = 0
 while os.path.isfile(os.path.join(
-        experiment_params.output_dir, 'param', 'params_id{0:d}.npy'.format(runid))):
+        experiment_params.output_dir, 'param', 'params_id{0:d}.py'.format(runid))):
     runid += 1
 data_fp = os.path.join(
     experiment_params.output_dir, 'data', 'data_id{0:d}.npy'.format(runid))
