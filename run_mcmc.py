@@ -22,19 +22,40 @@ else:
     sys.path.append('output_cov/param/')
     experiment_params = importlib.import_module('experiment_params_id' + str(cov_id))
     params = importlib.import_module('params_id' + str(cov_id))
-    cov_mat = np.load('output_cov/cov/cov_mat_id' + str(cov_id) + '.npy')
+    cov_mat_full = np.load('output_cov/cov/cov_mat_id' + str(cov_id) + '.npy')
     full_data = np.load('output_cov/data/data_id' + str(cov_id) + '.npy')
-    var_indep_0 = np.load('output_cov/var_indep/var_indep_id' + str(cov_id) + '.npy')
-    data_avg_0 = full_data.mean(1)
+    if mcmc_params.mode == 'ps':
+        cov_mat = cov_mat_full[:len(experiment_params.k_hist_bins) - 1, :len(experiment_params.k_hist_bins) - 1]
+        var_indep_0 = np.load('output_cov/var_indep/var_indep_id' +
+                              str(cov_id) + '.npy')[:len(experiment_params.k_hist_bins) - 1]
+        data = full_data[:len(experiment_params.k_hist_bins) - 1, 0]
+    elif mcmc_params.mode == 'vid':
+        cov_mat = cov_mat_full[len(experiment_params.k_hist_bins) - 1:, len(experiment_params.k_hist_bins) - 1:]
+        var_indep_0 = np.load('output_cov/var_indep/var_indep_id' +
+                              str(cov_id) + '.npy')[len(experiment_params.k_hist_bins) - 1:]
+        data = full_data[len(experiment_params.k_hist_bins) - 1:, 0]
+    elif mcmc_params.mode == 'vid + ps':
+        cov_mat = cov_mat_full
+        var_indep_0 = np.load('output_cov/var_indep/var_indep_id' +
+                              str(cov_id) + '.npy')
+        data = full_data[:, 0]
+    else:
+        print "Unknown mode. Only 'vid', 'ps', 'vid + ps' are allowed."
+        print "You gave:", mcmc_params.mode
+        print "Please insert valid mode in mcmc_params.py"
+        sys.exit()
+    # plt.imshow(cov_mat / np.sqrt(np.outer(var_indep_0, var_indep_0)), interpolation='none')
+    # plt.show()
+    # data_avg_0 = full_data.mean(1)
     # np.savetxt('bin_counts_test_10muK.txt', (0.5 * (mcmc_params.temp_hist_bins[:-1] + mcmc_params.temp_hist_bins[1:]), full_data[:, 33]))
-    data = full_data[:, 0]
+
 
 sys.path.append(mcmc_params.limlam_dir)
 llm = importlib.import_module('limlam_mocker')
 
 lnnormal = lambda x, mu, sigma: -(x - mu) ** 2 / (2 * sigma ** 2)
 
-mode = experiment_params.mode
+mode = mcmc_params.mode
 n_noise = mcmc_params.n_noise
 n_realizations = mcmc_params.n_realizations
 n_threads = mcmc_params.n_threads
@@ -102,7 +123,7 @@ def generate_mock_map(pos):
     # halos_fp = os.path.join(mcmc_params.limlam_dir + mcmc_params.halos_dir,
     #                         random.choice(os.listdir(mcmc_params.limlam_dir + mcmc_params.halos_dir)))
     # halos, cosmo = llm.load_peakpatch_catalogue(halos_fp)
-    # halos = llm.cull_peakpatch_catalogue(halos, params.min_mass, mapinst)
+    # halos = llm.cull_peakpatch_catalogue(halos, params.min_mass, full_map2)
     halos = all_halos[np.random.randint(0, len(all_halos))]
     halos.Lco = llm.Mhalo_to_Lco(halos, params.model, pos)
     if np.all(np.isfinite(halos.Lco)):
@@ -188,10 +209,7 @@ def lnlike(pos):
             var_indep = np.zeros_like(var_indep_0)
             var_indep[:n_k] = mean[:n_k] ** 2 / Nmodes
             var_indep[n_k:n_data] = mean[n_k:n_data]
-        else:
-            print "Unknown, mode, only 'vid', 'ps', 'vid + ps' are allowed."
-            print "You gave:", mode
-            return -np.infty, Pk_mod, lum_hist, B_i
+
         local_cov_mat = cov_mat * np.sqrt(np.outer(var_indep, var_indep) / np.outer(var_indep_0, var_indep_0))
         inv_cov_mat = np.linalg.inv(local_cov_mat)
         local_cov_det = np.linalg.det(local_cov_mat)
@@ -207,10 +225,8 @@ def lnprob(pos):
     ll = lnlike(pos)
 
     result = lnprior(pos) + ll[0]
-    # if not np.isfinite(result):
-    #     return -np.inf, np.nan * np.ones_like(k_hist_bins[1:]), np.nan * np.ones_like(
-    #         lum_hist_bins_obs), np.nan * np.ones_like(
-    #         temp_hist_bins)
+    if not np.isfinite(result):
+        return -np.inf, ll[1:]
     return result, ll[1:]
 
 ### begin bit from @tonyyli
@@ -245,6 +261,8 @@ if __name__ == '__main__':
     ensure_dir_exists(os.path.join(mcmc_params.output_dir, 'lumif'))
     lumif_fp = os.path.join(
         mcmc_params.output_dir, 'lumif', 'run{0:d}.dat'.format(runid))
+    lum_avg_fp = os.path.join(
+        mcmc_params.output_dir, 'lumif', 'avg_run{0:d}.npy'.format(runid))
     ensure_dir_exists(os.path.join(mcmc_params.output_dir, 'data'))
     B_i_fp = os.path.join(
         mcmc_params.output_dir, 'data', 'run{0:d}.dat'.format(runid))
@@ -263,6 +281,7 @@ if __name__ == '__main__':
     shutil.copy2('mcmc_params.py', mcmc_param_fp)
     shutil.copy2('output_cov/param/' + 'experiment_params_id' + str(cov_id) + '.py', experiment_param_fp)
     shutil.copy2('output_cov/param/' + 'params_id' + str(cov_id) + '.py', param_fp)
+    shutil.copy2('output_cov/lum_hist/' + 'lum_hist_id' + str(cov_id) + '.npy', lum_avg_fp)
     n_walkers = mcmc_params.n_walkers
     # if mode == 'ps':
     #     sampler = emcee.EnsembleSampler(n_walkers, 5, lnprob, threads=n_threads)
