@@ -4,6 +4,7 @@ cosmo = ac.FlatLambdaCDM(70., 0.286, Ob0=0.047)
 
 lum_hist_bins_obs = np.logspace(5, 12, 101)
 temp_hist_bins = np.logspace(1, 2, 26)
+fiducial_params = np.array((0, 1.17, 0.21, 0.3, 0.3))
 
 Tsys_K = 40
 Nfeeds = 19
