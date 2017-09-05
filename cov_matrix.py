@@ -118,8 +118,7 @@ def get_data(full_map, small_map, halo_fp):
 
     halos = llm.cull_peakpatch_catalogue(halos, params.min_mass, full_map)
 
-    prior_ctrs = np.array((0, 1.17, 0.21, 0.3, 0.3))
-    halos.Lco = llm.Mhalo_to_Lco(halos, params.model, prior_ctrs)
+    halos.Lco = llm.Mhalo_to_Lco(halos, params.model, experiment_params.fiducial_params)
 
     lum_hist = np.histogram(np.ma.masked_invalid(halos.Lco).compressed(),
                             bins=experiment_params.lum_hist_bins_obs * 4.9e-5)[0] / np.diff(
