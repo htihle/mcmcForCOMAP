@@ -5,6 +5,8 @@ import importlib
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d, UnivariateSpline
+from scipy import signal
+import scipy
 from mpi4py import MPI
 
 
@@ -98,6 +100,7 @@ CO_V = full_map.fov_x * full_map.fov_y * (np.pi / 180) ** 2 * (
         experiment_params.cosmo.comoving_distance(full_map.z_i)
         - experiment_params.cosmo.comoving_distance(full_map.z_f))).value
 
+
 def distribute_indices(n_indices, n_processes, my_rank):
     divide = n_indices / n_processes
     leftovers = n_indices % n_processes
@@ -113,6 +116,65 @@ def distribute_indices(n_indices, n_processes, my_rank):
     return my_indices
 
 
+def degrade(largemap, factor, axes=[0, 1]):
+    dims = np.array(largemap.shape)[axes]
+    rows, cols = dims / factor
+    if any(dims % factor > 0):
+        print "Invalid degration factor!"
+        sys.exit()
+    if len(largemap.shape) == 3:
+        return largemap.reshape(rows, largemap.shape[0] / rows,
+                                cols, largemap.shape[1] / cols, largemap.shape[2]).mean(axis=1).mean(axis=2)
+    else:
+        return largemap.reshape(rows, largemap.shape[0] / rows,
+                                cols, largemap.shape[1] / cols).mean(axis=1).mean(axis=2)
+
+
+def gaussian_kernel(sigma_x, sigma_y, n_sigma=5.0):
+    size_y = int(n_sigma * sigma_y)
+    size_x = int(n_sigma * sigma_x)
+    y, x = scipy.mgrid[-size_y:size_y + 1, -size_x:size_x + 1]
+    g = np.exp(-(x ** 2 / (2. * sigma_x ** 2) + y ** 2 / (2. * sigma_y ** 2)))
+    return g / g.sum()
+
+
+def gaussian_smooth(mymap, sigma_x, sigma_y, n_sigma=5.0):
+    kernel = gaussian_kernel(sigma_y, sigma_x, n_sigma=n_sigma)
+    improc = signal.fftconvolve(mymap, kernel[:, :, None], mode='same')
+    return improc
+
+
+def gauss_smooth_map_from_Lco(halos, mapinst, factor, fwhm):
+    mapinst.Ompix /= factor * factor
+
+    mapinst.pix_binedges_x = np.linspace(mapinst.pix_binedges_x[0], mapinst.pix_binedges_x[-1],
+                                         factor * (len(mapinst.pix_binedges_x) - 1) + 1)
+
+    mapinst.pix_binedges_y = np.linspace(mapinst.pix_binedges_y[0], mapinst.pix_binedges_y[-1],
+                                         factor * (len(mapinst.pix_binedges_y) - 1) + 1)
+
+    mapinst.maps = llm.Lco_to_map(halos, mapinst)
+
+    pixwidth = (mapinst.pix_binedges_x[1] - mapinst.pix_binedges_x[0]) * 60
+
+    sigma = fwhm / pixwidth / np.sqrt(8 * np.log(2))
+
+    mapinst.maps = gaussian_smooth(mapinst.maps, sigma, sigma)
+
+    # plt.figure()
+    # plt.imshow(filteredmap[:, :, 0], interpolation='none')
+    # plt.show()
+    mapinst.Ompix *= factor * factor
+
+    mapinst.pix_binedges_x = np.linspace(mapinst.pix_binedges_x[0], mapinst.pix_binedges_x[-1],
+                                         (len(mapinst.pix_binedges_x) - 1) / factor + 1)
+
+    mapinst.pix_binedges_y = np.linspace(mapinst.pix_binedges_y[0], mapinst.pix_binedges_y[-1],
+                                         (len(mapinst.pix_binedges_y) - 1) / factor + 1)
+    mapinst.maps = degrade(mapinst.maps, factor)
+    return 0
+
+
 def get_data(full_map, small_map, halo_fp):
     halos, cosmo = llm.load_peakpatch_catalogue(halo_fp)
 
@@ -124,8 +186,13 @@ def get_data(full_map, small_map, halo_fp):
                             bins=experiment_params.lum_hist_bins_obs * 4.9e-5)[0] / np.diff(
         np.log10(experiment_params.lum_hist_bins_obs)) / CO_V
 
-    full_map.maps = llm.Lco_to_map(halos, full_map)
-
+    if experiment_params.include_beam:
+        gauss_smooth_map_from_Lco(halos, full_map, experiment_params.resol_factor, experiment_params.fwhm)
+    else:
+        full_map.maps = llm.Lco_to_map(halos, full_map)
+    # plt.figure()
+    # plt.imshow(full_map.maps[:, :, 0], interpolation='none')
+    # plt.show()
     full_map.maps = full_map.maps + np.random.randn(*full_map.maps.shape) * noise_temp
 
     B_i = np.zeros((n_temp, n_maps_x * n_maps_y))
@@ -140,8 +207,7 @@ def get_data(full_map, small_map, halo_fp):
 
             B_i[:, index] = np.histogram(small_map.maps, bins=temp_hist_bins)[0]
             _, ps[:, index], _ = llm.map_to_pspec(small_map, cosmo, kbins=k_hist_bins)
-            # plt.figure()
-            # plt.imshow(small_map.maps[:, :, 0], interpolation='none')
+
 
     data[:n_k] = ps
     data[n_k:n_data] = B_i

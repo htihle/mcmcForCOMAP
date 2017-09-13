@@ -9,6 +9,8 @@ import importlib
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d, UnivariateSpline
+from scipy import signal
+import scipy
 
 import mcmc_params
 
@@ -118,6 +120,65 @@ if (mode == 'ps') or (mode == 'vid + ps'):
                                    Nmodes=Nmodes)
 
 
+def degrade(largemap, factor, axes=[0, 1]):
+    dims = np.array(largemap.shape)[axes]
+    rows, cols = dims / factor
+    if any(dims % factor > 0):
+        print "Invalid degration factor!"
+        sys.exit()
+    if len(largemap.shape) == 3:
+        return largemap.reshape(rows, largemap.shape[0] / rows,
+                                cols, largemap.shape[1] / cols, largemap.shape[2]).mean(axis=1).mean(axis=2)
+    else:
+        return largemap.reshape(rows, largemap.shape[0] / rows,
+                                cols, largemap.shape[1] / cols).mean(axis=1).mean(axis=2)
+
+
+def gaussian_kernel(sigma_x, sigma_y, n_sigma=5.0):
+    size_y = int(n_sigma * sigma_y)
+    size_x = int(n_sigma * sigma_x)
+    y, x = scipy.mgrid[-size_y:size_y + 1, -size_x:size_x + 1]
+    g = np.exp(-(x ** 2 / (2. * sigma_x ** 2) + y ** 2 / (2. * sigma_y ** 2)))
+    return g / g.sum()
+
+
+def gaussian_smooth(mymap, sigma_x, sigma_y, n_sigma=5.0):
+    kernel = gaussian_kernel(sigma_y, sigma_x, n_sigma=n_sigma)
+    improc = signal.fftconvolve(mymap, kernel[:, :, None], mode='same')
+    return improc
+
+
+def gauss_smooth_map_from_Lco(halos, mapinst, factor, fwhm):
+    mapinst.Ompix /= factor * factor
+
+    mapinst.pix_binedges_x = np.linspace(mapinst.pix_binedges_x[0], mapinst.pix_binedges_x[-1],
+                                         factor * (len(mapinst.pix_binedges_x) - 1) + 1)
+
+    mapinst.pix_binedges_y = np.linspace(mapinst.pix_binedges_y[0], mapinst.pix_binedges_y[-1],
+                                         factor * (len(mapinst.pix_binedges_y) - 1) + 1)
+
+    mapinst.maps = llm.Lco_to_map(halos, mapinst)
+
+    pixwidth = (mapinst.pix_binedges_x[1] - mapinst.pix_binedges_x[0]) * 60
+
+    sigma = fwhm / pixwidth / np.sqrt(8 * np.log(2))
+
+    mapinst.maps = gaussian_smooth(mapinst.maps, sigma, sigma)
+
+    # plt.figure()
+    # plt.imshow(filteredmap[:, :, 0], interpolation='none')
+    # plt.show()
+    mapinst.Ompix *= factor * factor
+
+    mapinst.pix_binedges_x = np.linspace(mapinst.pix_binedges_x[0], mapinst.pix_binedges_x[-1],
+                                         (len(mapinst.pix_binedges_x) - 1) / factor + 1)
+
+    mapinst.pix_binedges_y = np.linspace(mapinst.pix_binedges_y[0], mapinst.pix_binedges_y[-1],
+                                         (len(mapinst.pix_binedges_y) - 1) / factor + 1)
+    mapinst.maps = degrade(mapinst.maps, factor)
+    return 0
+
+
 def generate_mock_map(pos):
     global mapinst
     # halos_fp = os.path.join(mcmc_params.limlam_dir + mcmc_params.halos_dir,
@@ -133,7 +194,11 @@ def generate_mock_map(pos):
         lum_hist = np.histogram(np.ma.masked_invalid(halos.Lco).compressed(),
                                 bins=lum_hist_bins_int)[0] / np.diff(
             np.log10(lum_hist_bins_obs)) / CO_V
-    mapinst.maps = llm.Lco_to_map(halos, mapinst)
+
+    if experiment_params.include_beam:
+        gauss_smooth_map_from_Lco(halos, mapinst, experiment_params.resol_factor, experiment_params.fwhm)
+    else:
+        mapinst.maps = llm.Lco_to_map(halos, mapinst)
 
     # Add noise
     map_with_noise = mapinst.maps[None, :] + np.random.randn(n_noise, *mapinst.maps.shape) * noise_temp
