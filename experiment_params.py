@@ -4,12 +4,16 @@ cosmo = ac.FlatLambdaCDM(70., 0.286, Ob0=0.047)
 
 lum_hist_bins_obs = np.logspace(5, 12, 101)
 temp_hist_bins = np.logspace(1, 2, 26)
+k_hist_bins = np.logspace(-1.5, 0, 21)  # np.linspace(1e-2, 1e0, 21)
+fiducial_params = np.array((0, 1.17, 0.21, 0.3, 0.3))
+
+include_beam = True
+resol_factor = 4
+fwhm = 4  # arcmin
 
 Tsys_K = 40
 Nfeeds = 19
 tobs_hr = 6000
-
-mode = 'vid'
 
 # This is the parameters for calculations of
 # covariance matrices for COMAP, based on simulated
