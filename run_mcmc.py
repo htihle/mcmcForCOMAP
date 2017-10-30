@@ -27,20 +27,22 @@ else:
     cov_mat_full = np.load('output_cov/cov/cov_mat_id' + str(cov_id) + '.npy')
     full_data = np.load('output_cov/data/data_id' + str(cov_id) + '.npy')
     if mcmc_params.mode == 'ps':
-        cov_mat = cov_mat_full[:len(experiment_params.k_hist_bins) - 1, :len(experiment_params.k_hist_bins) - 1]
+        cov_mat = cov_mat_full[:len(experiment_params.k_hist_bins) - 1, :len(experiment_params.k_hist_bins) - 1] \
+                  / np.sqrt(mcmc_params.n_patches)
         var_indep_0 = np.load('output_cov/var_indep/var_indep_id' +
                               str(cov_id) + '.npy')[:len(experiment_params.k_hist_bins) - 1]
-        data = full_data[:len(experiment_params.k_hist_bins) - 1, 0]
+        data = np.mean(full_data[:len(experiment_params.k_hist_bins) - 1, 0:mcmc_params.n_patches], axis=1)
     elif mcmc_params.mode == 'vid':
-        cov_mat = cov_mat_full[len(experiment_params.k_hist_bins) - 1:, len(experiment_params.k_hist_bins) - 1:]
+        cov_mat = cov_mat_full[len(experiment_params.k_hist_bins) - 1:, len(experiment_params.k_hist_bins) - 1:] \
+                  / np.sqrt(mcmc_params.n_patches)
         var_indep_0 = np.load('output_cov/var_indep/var_indep_id' +
                               str(cov_id) + '.npy')[len(experiment_params.k_hist_bins) - 1:]
-        data = full_data[len(experiment_params.k_hist_bins) - 1:, 0]
+        data = np.mean(full_data[len(experiment_params.k_hist_bins) - 1:, 0:mcmc_params.n_patches], axis=1)
     elif mcmc_params.mode == 'vid + ps':
-        cov_mat = cov_mat_full
+        cov_mat = cov_mat_full / np.sqrt(mcmc_params.n_patches)
         var_indep_0 = np.load('output_cov/var_indep/var_indep_id' +
                               str(cov_id) + '.npy')
-        data = full_data[:, 0]
+        data = np.mean(full_data[:, 0:mcmc_params.n_patches], axis=1)
     else:
         print "Unknown mode. Only 'vid', 'ps', 'vid + ps' are allowed."
         print "You gave:", mcmc_params.mode
